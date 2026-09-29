@@ -31,7 +31,7 @@ function createDocumentController(documentService) {
           file: request.file,
           owner: request.userId,
         });
-        response.status(201).json(documentService.toPublicDocument(document));
+        response.status(201).json(document);
       } catch (error) {
         next(error);
       }

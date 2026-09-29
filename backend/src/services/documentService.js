@@ -1,5 +1,11 @@
 const { randomUUID } = require('node:crypto');
 
+function createDocumentNotFoundError() {
+  const error = new Error('Documento não encontrado');
+  error.statusCode = 404;
+  return error;
+}
+
 class DocumentService {
   constructor(documentRepository) {
     this.documentRepository = documentRepository;
@@ -17,7 +23,8 @@ class DocumentService {
     };
 
     try {
-      return await this.documentRepository.save(document);
+      const savedDocument = await this.documentRepository.save(document);
+      return this.toPublicDocument(savedDocument);
     } catch (error) {
       await this.documentRepository.removeFile(document).catch(() => {});
       throw error;
@@ -30,24 +37,28 @@ class DocumentService {
   }
 
   async getDownload(id, owner) {
-    const document = this.documentRepository.findById(id);
-    if (!document || document.owner !== owner) {
-      const error = new Error('Documento não encontrado');
-      error.statusCode = 404;
-      throw error;
-    }
-
-    if (!(await this.documentRepository.fileExists(document))) {
-      const error = new Error('Documento não encontrado');
-      error.statusCode = 404;
-      throw error;
-    }
+    const document = this.getOwnedDocument(id, owner);
+    await this.ensureFileExists(document);
 
     return {
       document: this.toPublicDocument(document),
       mimeType: document.mimeType,
       filePath: this.documentRepository.getFilePath(document),
     };
+  }
+
+  getOwnedDocument(id, owner) {
+    const document = this.documentRepository.findById(id);
+    if (!document || document.owner !== owner) {
+      throw createDocumentNotFoundError();
+    }
+    return document;
+  }
+
+  async ensureFileExists(document) {
+    if (!(await this.documentRepository.fileExists(document))) {
+      throw createDocumentNotFoundError();
+    }
   }
 
   toPublicDocument(document) {
